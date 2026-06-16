@@ -22,7 +22,7 @@
 
 **重要：本命令是确定性的纯静态分析，不需要 LLM API，也不需要 `/pipeline-config`。**
 离线即可运行，秒级完成。支持 Python（精确 `ast` 解析）、
-JavaScript / TypeScript / Java / C / C++ / C# / Go / Rust / Ruby / PHP / Swift / Kotlin / Scala 等。
+JavaScript / TypeScript / Java / C / C++ / C# / Go / Rust / Ruby / PHP / Swift / Kotlin / Scala / MATLAB / Octave 等。
 
 ---
 

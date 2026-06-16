@@ -7,7 +7,7 @@ pipeline_code.py — Code Atlas: 把一个文件夹当作项目工作区进行�
 
 特点：
     - 零 LLM、零依赖（纯标准库）：确定性、离线、秒级完成。
-    - 多语言：Python 精确解析；JS/TS/Java/C/C++/C#/Go/Rust/... 启发式解析。
+    - 多语言：Python 精确解析；MATLAB/Octave 文法解析；JS/TS/Java/C/C++/C#/Go/Rust/... 启发式解析。
 
 用法：
     python tools/pipeline_code.py [FOLDER] [选项]
@@ -80,7 +80,7 @@ def main():
 
     if not analysis.files:
         print("⚠️  未发现可分析的源代码文件。")
-        print("   支持的语言：Python / JS / TS / Java / C / C++ / C# / Go / Rust / Ruby / PHP / ...")
+        print("   支持的语言：Python / MATLAB / Octave / JS / TS / Java / C / C++ / C# / Go / Rust / Ruby / PHP / ...")
         sys.exit(0)
 
     # 渲染文本地图

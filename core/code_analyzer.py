@@ -73,6 +73,8 @@ BINARY_EXTS = {
     ".exe", ".dll", ".so", ".dylib", ".o", ".a", ".class", ".pyc",
     ".mp3", ".mp4", ".mov", ".avi", ".wav", ".ttf", ".otf", ".woff",
     ".woff2", ".eot", ".bin", ".dat", ".db", ".sqlite", ".lock",
+    # MATLAB/Simulink 二进制或非纯文本格式
+    ".mlx", ".mat", ".fig", ".slx", ".mdl", ".mexa64", ".mexw64",
 }
 
 DEFAULT_MAX_FILES = 5000
@@ -382,6 +384,225 @@ def parse_python(content: str, rel: str) -> Tuple[List[Symbol], List[str], str]:
 
     handle_body(tree.body, "", capture_vars=True)
     return symbols, imports, module_doc
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# MATLAB / GNU Octave 解析器（end 分隔块，遵循 Octave/MATLAB 语法）
+# ──────────────────────────────────────────────────────────────────────────
+#
+# 不依赖 Octave 二进制（其解析器为内部 C++，无公开的"文件→符号/AST"接口，
+# 且需执行代码）。此处用纯 Python 实现一个遵循 Octave/MATLAB 文法的解析器：
+# 以 end 系列关键字（含 Octave 的 endfunction/endif/...）跟踪块嵌套，
+# 识别 function / classdef / methods / properties / events / enumeration，
+# 支持 % 与 # 注释、%{ %} / #{ #} 块注释、`...` 续行。
+
+# 仅控制流块（function/classdef/section 单独处理）
+_MAT_CTRL_OPENERS = {
+    "if", "for", "parfor", "while", "switch", "try",
+    "do", "unwind_protect", "spmd",
+}
+_MAT_CLOSERS = {
+    "end", "endif", "endfor", "endparfor", "endwhile", "endswitch",
+    "end_try_catch", "endfunction", "endclassdef", "endmethods",
+    "endproperties", "endevents", "endenumeration", "until",
+    "end_unwind_protect", "endspmd", "endparblock",
+}
+
+
+def _strip_matlab_comment(line: str) -> str:
+    """去掉 MATLAB/Octave 行内注释（% 或 #），跳过字符串字面量。"""
+    out = []
+    in_s = in_d = False
+    for c in line:
+        if in_s:
+            out.append(c)
+            if c == "'":
+                in_s = False
+            continue
+        if in_d:
+            out.append(c)
+            if c == '"':
+                in_d = False
+            continue
+        if c == "'":
+            # 区分字符串起始 vs 转置运算符：转置跟在标识符/) /] /. /' 之后
+            prev = next((ch for ch in reversed(out) if not ch.isspace()), "")
+            if prev and (prev.isalnum() or prev in "_)]}.'"):
+                out.append(c)          # 转置
+            else:
+                in_s = True
+                out.append(c)
+            continue
+        if c == '"':
+            in_d = True
+            out.append(c)
+            continue
+        if c in "%#":
+            break
+        out.append(c)
+    return "".join(out)
+
+
+def _matlab_logical_lines(content: str):
+    """产出 (code, lineno)：处理 %{ %} 块注释与 `...` 续行。"""
+    lines = content.splitlines()
+    i, n = 0, len(lines)
+    in_block = False
+    while i < n:
+        st = lines[i].strip()
+        if in_block:
+            if st in ("%}", "#}"):
+                in_block = False
+            i += 1
+            continue
+        if st in ("%{", "#{"):
+            in_block = True
+            i += 1
+            continue
+        start = i + 1
+        code = _strip_matlab_comment(lines[i])
+        while code.rstrip().endswith("..."):
+            code = code.rstrip()[:-3]
+            i += 1
+            if i < n:
+                code += " " + _strip_matlab_comment(lines[i])
+            else:
+                break
+        yield code, start
+        i += 1
+
+
+def _parse_matlab_function(s: str) -> Tuple[str, str]:
+    """从 `function [a,b] = name(args)` 提取函数名。"""
+    body = s[len("function"):].strip() if s.startswith("function") else s
+    paren = body.find("(")
+    eq = body.find("=")
+    if eq != -1 and (paren == -1 or eq < paren):
+        body = body[eq + 1:].strip()
+    m = re.match(r"([A-Za-z_]\w*)", body)
+    return (m.group(1) if m else ""), s
+
+
+def parse_matlab(content: str, rel: str) -> Tuple[List[Symbol], List[str], str]:
+    """解析 MATLAB / Octave 源文件，返回 (symbols, imports, doc)。"""
+    symbols: List[Symbol] = []
+    imports: List[str] = []
+    doc = ""
+    for raw in content.splitlines():
+        st = raw.strip()
+        if not st:
+            continue
+        if (st.startswith("%") or st.startswith("#")) and st not in ("%{", "#{"):
+            doc = st.lstrip("%#").strip()
+        break
+
+    stack: List[dict] = []
+    current_class = ""
+
+    def section() -> str:
+        for f in reversed(stack):
+            if f["kw"] in ("properties", "methods", "events", "enumeration"):
+                return f["kw"]
+            if f["kw"] == "classdef":
+                return ""
+        return ""
+
+    for code, lineno in _matlab_logical_lines(content):
+        s = code.strip()
+        if not s:
+            continue
+        mkw = re.match(r"([A-Za-z_]\w*)", s)
+        kw = mkw.group(1) if mkw else ""
+        inside_classdef = any(f["kw"] == "classdef" for f in stack)
+        top_is_classdef = bool(stack) and stack[-1]["kw"] == "classdef"
+
+        # 块结束关键字（end / endfunction / until / ...）
+        if kw in _MAT_CLOSERS:
+            if stack:
+                popped = stack.pop()
+                if popped["kw"] == "classdef":
+                    current_class = ""
+            continue
+
+        if kw == "classdef":
+            m = re.match(r"classdef\s*(?:\([^)]*\)\s*)?([A-Za-z_]\w*)(.*)", s)
+            name = m.group(1) if m else ""
+            bases: List[str] = []
+            if m:
+                lt = re.search(r"<\s*(.+)$", m.group(2))
+                if lt:
+                    for b in re.split(r"&", lt.group(1)):
+                        bm = re.match(r"\s*([A-Za-z_][\w.]*)", b)
+                        if bm:
+                            bases.append(bm.group(1))
+            if name:
+                symbols.append(Symbol(name=name, kind="class", file=rel, line=lineno,
+                                      signature=s[:140], bases=bases, language="MATLAB"))
+                current_class = name
+            stack.append({"kw": "classdef", "name": name})
+            continue
+
+        # properties/methods/events/enumeration 仅作为 classdef 的直接子块
+        if kw in ("methods", "properties", "events", "enumeration") and top_is_classdef:
+            stack.append({"kw": kw, "name": ""})
+            continue
+
+        if kw == "function":
+            name, sig = _parse_matlab_function(s)
+            sec = section()
+            if current_class and sec in ("methods", ""):
+                kind, parent = "method", current_class
+            else:
+                kind, parent = "function", ""
+            if name:
+                symbols.append(Symbol(name=name, kind=kind, file=rel, line=lineno,
+                                      signature=sig[:140], parent=parent, language="MATLAB"))
+            # 仅 classdef 内的函数（方法）保证 end 终止，可安全入栈跟踪
+            if inside_classdef:
+                stack.append({"kw": "function", "name": name})
+            continue
+
+        if kw in _MAT_CTRL_OPENERS:
+            stack.append({"kw": kw, "name": ""})
+            continue
+
+        if kw == "import":
+            im = re.match(r"import\s+([A-Za-z_][\w.]*)", s)
+            if im:
+                imports.append(im.group(1))
+            continue
+
+        # properties / enumeration 块内的成员声明
+        sec = section()
+        if current_class and sec == "properties":
+            pm = re.match(r"([A-Za-z_]\w*)", s)
+            if pm and pm.group(1) not in _MAT_CTRL_OPENERS:
+                symbols.append(Symbol(name=pm.group(1), kind="field", file=rel, line=lineno,
+                                      signature=s[:140], parent=current_class, language="MATLAB"))
+        elif current_class and sec == "enumeration":
+            em = re.match(r"([A-Za-z_]\w*)", s)
+            if em:
+                symbols.append(Symbol(name=em.group(1), kind="constant", file=rel, line=lineno,
+                                      signature=s[:140], parent=current_class, language="MATLAB"))
+
+    return symbols, imports, doc
+
+
+def _classify_dot_m(text: str) -> str:
+    """`.m` 扩展名同时被 MATLAB 与 Objective-C 使用 — 按内容判别。"""
+    head = text[:4000]
+    if any(mk in head for mk in ("#import", "@interface", "@implementation",
+                                 "@protocol", "@end", "@property")):
+        return "Objective-C"
+    if re.search(r"^\s*[-+]\s*\([\w\s*]+\)\s*\w+", head, re.M):   # - (void)foo / + (id)bar
+        return "Objective-C"
+    if re.search(r"^\s*(function\b|classdef\b)", head, re.M) or "endfunction" in head:
+        return "MATLAB"
+    if re.search(r"^\s*%", head, re.M):
+        return "MATLAB"
+    if "#include" in head:
+        return "Objective-C"
+    return "MATLAB"
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -804,8 +1025,16 @@ def analyze_workspace(root, *, max_files: int = DEFAULT_MAX_FILES,
 
         fi = FileInfo(path=rel, language=lang, loc=_count_loc(content), size=len(content))
 
+        # `.m` 同时是 MATLAB 与 Objective-C 的扩展名 — 按内容判别
+        if ap.suffix.lower() == ".m":
+            lang = _classify_dot_m(content)
+            fi.language = lang
+
         if lang == "Python":
             syms, imports, doc = parse_python(content, rel)
+            fi.doc = doc
+        elif lang == "MATLAB":
+            syms, imports, doc = parse_matlab(content, rel)
             fi.doc = doc
         else:
             spec = _LANG_SPECS.get(lang)

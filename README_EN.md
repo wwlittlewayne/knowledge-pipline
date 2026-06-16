@@ -336,7 +336,7 @@ along with their **relationships** (containment / import dependencies / inherita
 to build a complete code knowledge graph.
 
 - ⚡ **Zero LLM, zero deps, runs in seconds** — pure-stdlib static analysis, fully offline & deterministic, **no `/pipeline-config` needed**
-- 🧠 **Multi-language** — Python (precise `ast`) + JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala (heuristic)
+- 🧠 **Multi-language** — Python (precise `ast`) + MATLAB/Octave (`end`-delimited grammar parser) + JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala (heuristic)
 - 📤 **Built for LLMs** — emits structured text you can paste into any AI model so it instantly "understands" the project
 
 Three outputs (default `<folder>/codemap/`):

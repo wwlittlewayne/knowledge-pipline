@@ -7,7 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from core.code_analyzer import analyze_workspace, parse_python, _scan_regex, _LANG_SPECS
+from core.code_analyzer import (
+    analyze_workspace, parse_python, parse_matlab, _classify_dot_m,
+    _scan_regex, _LANG_SPECS,
+)
 from core.code_report import render_markdown, render_html
 
 
@@ -179,6 +182,90 @@ def test_c_parsing():
     assert kinds.get("MAX") == "macro"
     assert kinds.get("Point") == "struct"
     assert kinds.get("add") == "function"
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# MATLAB / GNU Octave parsing
+# ──────────────────────────────────────────────────────────────────────────
+
+MATLAB_CLASS = """% Account class
+classdef Account < handle & matlab.mixin.Copyable
+    properties (Access = private)
+        Balance = 0
+    end
+    properties (Constant)
+        BANK = "ACME"
+    end
+    methods
+        function obj = Account(o)
+            obj.Owner = o;
+        end
+        function deposit(obj, amt)
+            if amt > 0
+                obj.Balance = obj.Balance + amt;
+            end
+        end
+    end
+    methods (Static)
+        function n = bankName()
+            n = Account.BANK;
+        end
+    end
+end
+"""
+
+
+def test_matlab_classdef():
+    syms, _, doc = parse_matlab(MATLAB_CLASS, "Account.m")
+    by = {(s.name, s.kind): s for s in syms}
+    assert doc == "Account class"
+    cls = by[("Account", "class")]
+    assert "handle" in cls.bases and "matlab.mixin.Copyable" in cls.bases
+    # private + constant properties become fields of the class
+    assert by[("Balance", "field")].parent == "Account"
+    assert by[("BANK", "field")].parent == "Account"
+    # methods (incl. static) attributed to the class; control flow inside doesn't corrupt nesting
+    assert by[("deposit", "method")].parent == "Account"
+    assert by[("bankName", "method")].parent == "Account"
+
+
+def test_matlab_octave_script_functions():
+    # Octave style: endfunction, # comments, `...` line continuation, no classdef
+    oct = (
+        "# helpers\n"
+        "function r = add(a, b)\n"
+        "  r = a + ...\n"
+        "      b;\n"
+        "endfunction\n"
+        "function out = scale(x)\n"
+        "  out = x * 2;\n"
+        "endfunction\n"
+    )
+    syms, _, _ = parse_matlab(oct, "helpers.m")
+    by = {s.name: s for s in syms}
+    assert by["add"].kind == "function" and by["add"].parent == ""
+    assert by["scale"].kind == "function"
+
+
+def test_dot_m_disambiguation():
+    assert _classify_dot_m(MATLAB_CLASS) == "MATLAB"
+    assert _classify_dot_m("function y = f(x)\n y = x;\nend\n") == "MATLAB"
+    objc = '#import <Foundation/Foundation.h>\n@implementation Foo\n- (void)bar {}\n@end\n'
+    assert _classify_dot_m(objc) == "Objective-C"
+
+
+def test_analyze_workspace_matlab_vs_objc(tmp_path):
+    (tmp_path / "Sensor.m").write_text(
+        "classdef Sensor < handle\n  methods\n"
+        "    function r = read(obj); r = 1; end\n  end\nend\n")
+    (tmp_path / "Widget.m").write_text(
+        '#import "Widget.h"\n@implementation Widget\n- (id)init { return self; }\n@end\n')
+    a = analyze_workspace(tmp_path)
+    langs = {f.path: f.language for f in a.files}
+    assert langs["Sensor.m"] == "MATLAB"
+    assert langs["Widget.m"] == "Objective-C"
+    matlab_syms = {s.name for s in a.symbols if s.language == "MATLAB"}
+    assert "Sensor" in matlab_syms and "read" in matlab_syms
 
 
 # ──────────────────────────────────────────────────────────────────────────
