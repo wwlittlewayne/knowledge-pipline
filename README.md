@@ -209,7 +209,7 @@ node "$HOME\.agents\skills\knowledge-pipline\scripts\install-commands.mjs"
 node ~/.agents/skills/knowledge-pipline/scripts/install-commands.mjs
 ```
 
-这会将六个斜杠命令注册到 `~/.claude/commands/`，让你可以在任何项目中使用 `/pipeline-config`、`/pipeline-ingest`、`/pipeline-query`、`/pipeline-graph`、`/pipeline-lint`、`/pipeline-ppt`。
+这会将七个斜杠命令注册到 `~/.claude/commands/`，让你可以在任何项目中使用 `/pipeline-config`、`/pipeline-ingest`、`/pipeline-query`、`/pipeline-graph`、`/pipeline-lint`、`/pipeline-ppt`、`/pipeline-code`。
 
 ### 方式二：手动安装
 
@@ -344,6 +344,41 @@ pip install opencv-python
 - 节点边框色按社区聚类着色（Louvain 检测）
 - 边区分显式链接和推断关系
 - 支持搜索和缩放
+
+### 🗺️ 代码符号图谱（Code Atlas）
+
+> 不只是文档 — 把**整个代码库**也编译成可推理的知识结构。像 Source Insight 一样理解代码。
+
+```
+/pipeline-code .            # 把当前文件夹当作项目工作区分析
+/pipeline-code /path/to/repo --open
+```
+
+把一个文件夹当作项目工作区，递归扫描源码，提取**所有符号**
+（类 / 函数 / 方法 / 接口 / 结构体 / 枚举 / 常量 / 宏 / 类型 / 字段）以及它们之间的
+**关系**（包含 / 导入依赖 / 继承 / 调用 / 跨文件引用），构建完整的代码知识图谱。
+
+- ⚡ **零 LLM、零依赖、秒级完成** — 纯标准库静态分析，离线确定性运行，**不需要 `/pipeline-config`**
+- 🧠 **多语言** — Python（`ast` 精确解析）+ JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala（启发式）
+- 📤 **为 LLM 而生** — 输出结构化文本，直接贴给任意 AI 模型即可"读懂"整个项目
+
+三个产物（默认写到 `<文件夹>/codemap/`）：
+
+| 产物 | 用途 |
+|------|------|
+| **`codemap.md`** | 结构化文本地图 — 概览 / 目录树 / 逐文件符号大纲 / 符号索引 / 依赖图 / 继承 / 调用图，**喂给 LLM** |
+| `symbols.json` | 完整机器可读符号数据库（文件 / 符号 / 边 / 统计），供下游程序消费 |
+| `codemap.html` | 自包含 vis.js 交互式符号图谱，浏览器打开即可探索 |
+
+```
+你：/pipeline-code .
+AI：📊 Code Atlas 分析完成
+       文件: 84 个 · 代码行: ~21,690 LOC
+       符号: 1342 个 · 关系: 2425 条
+       语言: Python 82 · JavaScript 2
+       构成: method 475 · field 328 · function 318 · constant 133 · class 88
+    ✅ 输出: codemap/codemap.md（喂给 LLM）· symbols.json · codemap.html
+```
 
 ---
 
@@ -486,7 +521,7 @@ AI：📑 Live PPT Generator
 
 ## ⚙️ 命令参考
 
-安装后，你将获得 **六个核心斜杠命令**，在 Claude Code 任意项目中可用：
+安装后，你将获得 **七个核心斜杠命令**，在 Claude Code 任意项目中可用：
 
 ### ⚙️ `/pipeline-config` — 配置 LLM API
 
@@ -542,6 +577,21 @@ AI：📑 Live PPT Generator
 输出：
 - `graph/graph.json` — 节点 + 边 + 社区数据
 - `graph/graph.html` — 浏览器打开即可交互探索
+
+### 🗺️ `/pipeline-code` — 分析代码库符号图谱
+
+把一个文件夹当作项目工作区，做 Source Insight 风格的符号级静态分析。**无需 LLM，无需配置。**
+
+```bash
+/pipeline-code .                       # 分析当前目录
+/pipeline-code /path/to/project --open # 分析并打开交互式图谱
+```
+
+提取类 / 函数 / 方法 / 接口 / 结构体 / 枚举 / 常量 / 宏 / 类型 / 字段等全部符号，
+以及包含 / 导入依赖 / 继承 / 调用 / 引用关系，输出到 `<文件夹>/codemap/`：
+- `codemap.md` — 为 LLM 优化的结构化文本地图（主产物）
+- `symbols.json` — 完整机器可读符号数据库
+- `codemap.html` — 自包含 vis.js 交互式符号图谱
 
 ### 📑 `/pipeline-ppt` — 生成 Live PPT
 
@@ -629,6 +679,7 @@ AI 会基于你选的文档，给出一个建议主题：
 | `查询 <问题>` / `query: <question>` | `/pipeline-query` |
 | `构建图谱` / `build graph` | `/pipeline-graph` |
 | `做PPT` / `生成演示` / `make ppt` | `/pipeline-ppt` |
+| `分析代码库` / `代码符号图谱` / `analyze codebase` | `/pipeline-code` |
 | `检查` / `lint` | `/pipeline-lint` |
 
 ### Python CLI
@@ -643,6 +694,7 @@ python tools/pipeline_query.py "<q>" --rc          # 深度推理链查询
 python tools/pipeline_lint.py                      # 检查
 python tools/build_graph.py                        # 构建图谱
 python tools/pipeline_ppt.py "主题" --open          # 生成 Live PPT
+python tools/pipeline_code.py <folder> --open      # 代码符号图谱（无需 LLM）
 python tools/pipeline_config.py                    # 配置
 ```
 

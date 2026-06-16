@@ -16,6 +16,7 @@ description: "多模态知识管道技能 — 摄入文档(PDF/图片/视频/Off
 | **主动矛盾检测** | 摄入后自动对比新旧 claims，报告跨源冲突 |
 | **跨源聚合查询** | 查询时展示多源视角、共识与分歧 |
 | **知识图谱** | 自动构建交互式 vis.js 可视化图谱 |
+| **代码符号图谱** | 把文件夹当工作区，提取全部符号与关系（Source Insight 风格），输出 LLM 可读文本 |
 
 ---
 
@@ -27,6 +28,7 @@ description: "多模态知识管道技能 — 摄入文档(PDF/图片/视频/Off
 | `/pipeline-query <问题>` | 多源聚合查询 |
 | `/pipeline-lint` | 检查孤立页面、断链、矛盾 |
 | `/pipeline-graph` | 构建交互式知识图谱 |
+| `/pipeline-code [文件夹]` | 分析代码库符号知识图谱（Source Insight 风格，**无需 LLM**） |
 | `/pipeline-config` | 配置 LLM API |
 
 ---
@@ -47,12 +49,15 @@ SKILL_DIR/
 │   ├── pipeline_query.py
 │   ├── pipeline_lint.py
 │   ├── pipeline_graph.py
+│   ├── pipeline_code.py  # 代码库符号分析（Code Atlas）
 │   ├── pipeline_config.py
 │   └── build_graph.py
 ├── core/                 # 核心模块
 │   ├── llm_config.py     # LLM API 配置管理
 │   ├── retrieval.py      # BM25 检索引擎
 │   ├── wikilink.py       # Wikilink 解析器
+│   ├── code_analyzer.py  # 代码符号提取引擎（多语言）
+│   ├── code_report.py    # 代码地图渲染（文本 + HTML 图谱）
 │   └── export.py         # 导出功能
 ├── backend/              # 文件处理器
 │   └── processors/       # PDF/图片/视频/Office 处理器
@@ -271,6 +276,44 @@ python <skill-dir>/tools/build_graph.py --open
 1. Grep 提取所有 [[wikilinks]]
 2. 构建节点/边列表
 3. 生成 graph.json + graph.html
+
+---
+
+## 命令：分析代码库（Code Atlas）
+
+**触发**：用户说“分析这个项目/代码库”、“代码符号图谱”、“analyze codebase”、
+“像 Source Insight 一样分析”、“把这个文件夹做成给 AI 看的结构”等，或使用 `/pipeline-code`
+
+把一个**文件夹当作项目工作区**，递归扫描源码，提取所有符号
+（类 / 函数 / 方法 / 接口 / 结构体 / 枚举 / 常量 / 宏 / 类型 / 字段）以及它们之间的
+关系（包含 / 导入依赖 / 继承 / 调用 / 引用），构建完整的代码知识图谱。
+
+> ⚠️ **本命令是确定性纯静态分析，不需要 LLM API，也不需要 `/pipeline-config`。**
+
+### 用法
+```
+/pipeline-code                 # 分析当前工作目录
+/pipeline-code /path/to/proj   # 分析指定文件夹
+分析这个代码库的结构
+```
+
+### 执行方式
+```bash
+python <skill-dir>/tools/pipeline_code.py "<文件夹>" --open
+```
+若在本仓库内运行，直接用 `tools/pipeline_code.py`。
+
+### 输出（默认写到 `<文件夹>/codemap/`）
+- `codemap.md` — **结构化文本地图**，为 LLM 优化，直接喂给模型即可"读懂"项目
+- `symbols.json` — 完整机器可读符号数据库（文件 / 符号 / 边 / 统计）
+- `codemap.html` — 自包含 vis.js 交互式符号图谱
+
+### 支持语言
+Python（`ast` 精确解析）、JavaScript / TypeScript / Java / C / C++ / C# / Go /
+Rust / Ruby / PHP / Swift / Kotlin / Scala 等（启发式解析）。
+
+### 备选方案
+Python 不可用时，用 Glob/Grep/Read 手动汇总符号，按相同结构写出 `codemap.md`。
 
 ---
 

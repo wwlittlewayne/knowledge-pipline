@@ -187,7 +187,7 @@ node "$HOME\.agents\skills\knowledge-pipline\scripts\install-commands.mjs"
 node ~/.agents/skills/knowledge-pipline/scripts/install-commands.mjs
 ```
 
-This registers six slash commands to `~/.claude/commands/`, making `/pipeline-config`, `/pipeline-ingest`, `/pipeline-query`, `/pipeline-graph`, `/pipeline-lint`, and `/pipeline-ppt` available in any project.
+This registers seven slash commands to `~/.claude/commands/`, making `/pipeline-config`, `/pipeline-ingest`, `/pipeline-query`, `/pipeline-graph`, `/pipeline-lint`, `/pipeline-ppt`, and `/pipeline-code` available in any project.
 
 ### Option 2: Manual Install
 
@@ -320,6 +320,32 @@ Generates a self-contained `graph.html` — open in browser to interactively exp
 - Node border color by community cluster (Louvain detection)
 - Edges distinguish explicit links from inferred relationships
 - Search and zoom support
+
+### 🗺️ Code Atlas — Symbol Knowledge Graph
+
+> Not just documents — compile your **entire codebase** into a reasoning-ready structure too. Understand code like Source Insight.
+
+```
+/pipeline-code .              # Analyze the current folder as a project workspace
+/pipeline-code /path/to/repo --open
+```
+
+Treats a folder as a project workspace, recursively scans the source, and extracts **every symbol**
+(classes / functions / methods / interfaces / structs / enums / constants / macros / types / fields)
+along with their **relationships** (containment / import dependencies / inheritance / calls / cross-file references)
+to build a complete code knowledge graph.
+
+- ⚡ **Zero LLM, zero deps, runs in seconds** — pure-stdlib static analysis, fully offline & deterministic, **no `/pipeline-config` needed**
+- 🧠 **Multi-language** — Python (precise `ast`) + JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala (heuristic)
+- 📤 **Built for LLMs** — emits structured text you can paste into any AI model so it instantly "understands" the project
+
+Three outputs (default `<folder>/codemap/`):
+
+| Output | Purpose |
+|--------|---------|
+| **`codemap.md`** | Structured text map — overview / tree / per-file outlines / symbol index / dependency graph / hierarchy / call graph. **Feed it to an LLM.** |
+| `symbols.json` | Full machine-readable symbol database (files / symbols / edges / stats) |
+| `codemap.html` | Self-contained vis.js interactive symbol graph |
 
 ---
 
@@ -462,7 +488,7 @@ AI:  📑 Live PPT Generator
 
 ## ⚙️ Command Reference
 
-After installation, you get **six core slash commands**, available in any Claude Code project:
+After installation, you get **seven core slash commands**, available in any Claude Code project:
 
 ### ⚙️ `/pipeline-config` — Configure LLM API
 
@@ -519,6 +545,22 @@ Output:
 - `graph/graph.json` — Nodes + edges + community data
 - `graph/graph.html` — Open in browser to explore interactively
 
+### 🗺️ `/pipeline-code` — Analyze Codebase Symbol Graph
+
+Treat a folder as a project workspace and run Source Insight–style symbol analysis. **No LLM, no config required.**
+
+```
+/pipeline-code .                       # Analyze current directory
+/pipeline-code /path/to/project --open # Analyze and open the interactive graph
+```
+
+Extracts all symbols (classes / functions / methods / interfaces / structs / enums / constants /
+macros / types / fields) plus containment / import / inheritance / call / reference relationships,
+writing to `<folder>/codemap/`:
+- `codemap.md` — LLM-optimized structured text map (primary output)
+- `symbols.json` — full machine-readable symbol database
+- `codemap.html` — self-contained vis.js interactive symbol graph
+
 ### 📑 `/pipeline-ppt` — Generate Live PPT
 
 Generate interactive HTML presentations from wiki knowledge.
@@ -560,6 +602,7 @@ Checks for:
 | `ingest <file>` | `/pipeline-ingest` |
 | `query: <question>` | `/pipeline-query` |
 | `build graph` | `/pipeline-graph` |
+| `analyze codebase` / `code symbol graph` | `/pipeline-code` |
 | `make ppt` / `generate slides` | `/pipeline-ppt` |
 | `lint` / `check wiki` | `/pipeline-lint` |
 
@@ -575,6 +618,7 @@ python tools/pipeline_query.py "<q>" --rc          # Deep reasoning chain query
 python tools/pipeline_lint.py                      # Lint
 python tools/build_graph.py                        # Build graph
 python tools/pipeline_ppt.py "topic" --open          # Generate Live PPT
+python tools/pipeline_code.py <folder> --open      # Code symbol graph (no LLM)
 python tools/pipeline_config.py                    # Configure
 ```
 

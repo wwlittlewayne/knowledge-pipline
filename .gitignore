@@ -48,6 +48,9 @@ graph/.cache.json
 graph/graph.json
 graph/graph.html
 
+# Code Atlas generated output (/pipeline-code)
+codemap/
+
 # Environment variables
 .env
 

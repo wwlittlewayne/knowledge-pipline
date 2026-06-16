@@ -26,11 +26,14 @@ const copies = [
   { from: 'tools/pipeline_graph.py', to: 'tools/pipeline_graph.py' },
   { from: 'tools/pipeline_config.py', to: 'tools/pipeline_config.py' },
   { from: 'tools/build_graph.py', to: 'tools/build_graph.py' },
+  { from: 'tools/pipeline_code.py', to: 'tools/pipeline_code.py' },
   // core
   { from: 'core/llm_config.py', to: 'core/llm_config.py' },
   { from: 'core/retrieval.py', to: 'core/retrieval.py' },
   { from: 'core/wikilink.py', to: 'core/wikilink.py' },
   { from: 'core/export.py', to: 'core/export.py' },
+  { from: 'core/code_analyzer.py', to: 'core/code_analyzer.py' },
+  { from: 'core/code_report.py', to: 'core/code_report.py' },
 ];
 
 const dirCopies = [

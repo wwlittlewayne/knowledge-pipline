@@ -88,6 +88,7 @@
 | `/pipeline-lint` | `检查维基` |
 | `/pipeline-graph` | `构建知识图谱` |
 | `/pipeline-ppt` | `生成 Live PPT 演示文稿` |
+| `/pipeline-code` | `分析代码库 ./src`（代码符号图谱，无需 LLM） |
 
 或者直接用自然语言描述你的需求：
 - *"摄入这个文件：raw/papers/attention-is-all-you-need.md"*
@@ -95,6 +96,7 @@
 - *"检查维基中的孤立页面和矛盾之处"*
 - *"构建图谱并告诉我与 RAG 相关的内容"*
 - *"帮我做一个安全分析的 PPT"*
+- *"把这个文件夹当项目打开，分析代码结构并生成给 AI 看的符号地图"*
 
 Claude Code 会自动读取此文件并按照下面的工作流执行。
 
@@ -113,6 +115,7 @@ wiki/         # Claude 完全拥有这一层
   concepts/   # 思想、框架、方法、理论
   syntheses/  # 保存的查询答案
 graph/        # 自动生成的图谱数据
+codemap/      # /pipeline-code 生成的代码符号地图（codemap.md / symbols.json / codemap.html）
 tools/        # 可选的独立 Python 脚本（需要 LLM API 密钥）
 ```
 
@@ -259,6 +262,29 @@ source_file: raw/...
    - 识别所有 `[[wikilinks]]`
    - 构建节点和边列表
    - 直接生成 `graph/graph.json` 和 `graph/graph.html`
+
+---
+
+## 代码库分析工作流（Code Atlas）
+
+触发方式：*"分析这个项目/代码库"*、*"代码符号图谱"*、*"像 Source Insight 一样分析"* 或 `/pipeline-code`
+
+**无需 LLM 配置** — 这是确定性纯静态分析，离线即可运行。
+
+把一个**文件夹当作项目工作区**，递归扫描源码，提取所有符号
+（类 / 函数 / 方法 / 接口 / 结构体 / 枚举 / 常量 / 宏 / 类型 / 字段）及其关系
+（包含 / 导入依赖 / 继承 / 调用 / 引用），构建完整的代码知识图谱。
+
+运行 `tools/pipeline_code.py <文件夹>`，它会：
+- 识别多语言源文件（Python 用 `ast` 精确解析；JS/TS/Java/C/C++/C#/Go/Rust/… 启发式解析）
+- 跳过 `node_modules`、`.git`、`dist`、`venv` 等噪音目录
+- 解析模块依赖、类继承、调用图、跨文件引用计数
+- 输出到 `<文件夹>/codemap/`：
+  - `codemap.md` — **结构化文本地图**，为 LLM 优化，直接喂给模型即可读懂项目
+  - `symbols.json` — 完整机器可读符号数据库
+  - `codemap.html` — 自包含 vis.js 交互式符号图谱
+
+Python 不可用时，用 Glob/Grep/Read 手动汇总符号，按相同结构写出 `codemap.md`。
 
 ---
 

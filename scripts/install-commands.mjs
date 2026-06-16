@@ -38,6 +38,7 @@ const commandFiles = [
   'pipeline-lint.md',
   'pipeline-config.md',
   'pipeline-ppt.md',
+  'pipeline-code.md',
 ];
 
 console.log('');
@@ -77,4 +78,5 @@ console.log('    /pipeline-query "你的问题"                   # 查询');
 console.log('    /pipeline-graph                            # 构建知识图谱');
 console.log('    /pipeline-lint                             # 检查维基');
 console.log('    /pipeline-ppt "你的主题"                  # 生成 Live PPT');
+console.log('    /pipeline-code .                           # 分析代码库符号图谱');
 console.log('');
