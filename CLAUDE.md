@@ -276,7 +276,7 @@ source_file: raw/...
 （包含 / 导入依赖 / 继承 / 调用 / 引用），构建完整的代码知识图谱。
 
 运行 `tools/pipeline_code.py <文件夹>`，它会：
-- 识别多语言源文件（Python 用 `ast` 精确解析；JS/TS/Java/C/C++/C#/Go/Rust/… 启发式解析）
+- 识别多语言源文件（Python 用 `ast` 精确解析；MATLAB/Octave 用 `end` 分隔块文法解析；JS/TS/Java/C/C++/C#/Go/Rust/… 启发式解析）
 - 跳过 `node_modules`、`.git`、`dist`、`venv` 等噪音目录
 - 解析模块依赖、类继承、调用图、跨文件引用计数
 - 输出到 `<文件夹>/codemap/`：

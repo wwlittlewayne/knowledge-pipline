@@ -309,7 +309,8 @@ python <skill-dir>/tools/pipeline_code.py "<文件夹>" --open
 - `codemap.html` — 自包含 vis.js 交互式符号图谱
 
 ### 支持语言
-Python（`ast` 精确解析）、JavaScript / TypeScript / Java / C / C++ / C# / Go /
+Python（`ast` 精确解析）、MATLAB / Octave（`end` 分隔块文法解析）、
+JavaScript / TypeScript / Java / C / C++ / C# / Go /
 Rust / Ruby / PHP / Swift / Kotlin / Scala 等（启发式解析）。
 
 ### 备选方案

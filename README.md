@@ -359,7 +359,7 @@ pip install opencv-python
 **关系**（包含 / 导入依赖 / 继承 / 调用 / 跨文件引用），构建完整的代码知识图谱。
 
 - ⚡ **零 LLM、零依赖、秒级完成** — 纯标准库静态分析，离线确定性运行，**不需要 `/pipeline-config`**
-- 🧠 **多语言** — Python（`ast` 精确解析）+ JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala（启发式）
+- 🧠 **多语言** — Python（`ast` 精确解析）+ MATLAB/Octave（`end` 分隔块文法解析）+ JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala（启发式）
 - 📤 **为 LLM 而生** — 输出结构化文本，直接贴给任意 AI 模型即可"读懂"整个项目
 
 三个产物（默认写到 `<文件夹>/codemap/`）：
