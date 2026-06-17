@@ -1,5 +1,9 @@
 # Offline bundle — full pipeline with a local LLM (Windows)
 
+> **On Linux?** Use [`linux/`](linux/README.md) instead (`bash offline-bundle/linux/install-offline.sh`).
+> The files in *this* (root) folder are the **Windows** bundle. The `node/`, `vendor/`, and
+> `llm_config.template.json` here are platform-neutral and shared by both.
+
 Self-contained dependencies to run the **full document pipeline** (`/pipeline-ingest`,
 `/pipeline-query`, `/pipeline-graph`, `/pipeline-ppt`) on a **Windows machine with no internet**,
 driven by a **local LLM** (Ollama or any OpenAI-compatible server).
