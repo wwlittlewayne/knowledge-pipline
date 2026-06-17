@@ -143,6 +143,34 @@ If Python/deps unavailable, build manually:
 
 ---
 
+## Code Atlas Workflow (codebase symbol map)
+
+Triggered by: *"analyze this codebase"*, *"build a code symbol map"*, *"like Source Insight"*
+
+**No LLM / API key required** — this is deterministic static analysis, runs offline.
+
+Point it at any folder to extract a complete symbol knowledge graph (classes,
+functions, methods, interfaces, structs, enums, constants, macros, types, fields)
+plus relationships (containment, imports, inheritance, calls, references), then
+emit LLM-ready structured text.
+
+First try:
+```
+python tools/pipeline_code.py <folder> --open
+```
+
+Outputs to `<folder>/codemap/`:
+- `codemap.md` — structured text map, optimized to feed straight into an LLM
+- `symbols.json` — full machine-readable symbol database
+- `codemap.html` — self-contained vis.js interactive symbol graph
+
+Supports Python (precise `ast`), MATLAB/Octave (`end`-delimited grammar), and
+JS/TS/Java/C/C++/C#/Go/Rust/Ruby/PHP/Swift/Kotlin/Scala (heuristic). If Python is
+unavailable, summarize symbols manually with file search + read and write the same
+`codemap.md` structure.
+
+---
+
 ## Naming Conventions
 
 - Source slugs: `kebab-case` matching source filename

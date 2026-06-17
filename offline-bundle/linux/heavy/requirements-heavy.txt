@@ -1,0 +1,23 @@
+# requirements-heavy.txt — OPTIONAL OCR / video stack for Linux (NOT vendored in git).
+#
+# Heavy native dependencies the core bundle leaves out:
+#   paddleocr     -> image OCR (Chinese + multilingual)  [backend/processors/image_processor.py]
+#   paddlepaddle  -> OCR engine backend (large, ~100+ MB)
+#   opencv-python -> video frame extraction (optional)   [backend/processors/video_processor.py]
+#
+# Too big to commit (PaddlePaddle exceeds GitHub's 100 MB/file limit) and LAZY-imported, so the
+# pipeline runs fine without them (OCR/video just log "optional dep missing").
+#
+# HOW TO GET THEM (offline):
+#   1. On a LINUX box matching the target (CPython 3.9, x86_64, glibc) WITH internet, run:
+#          bash download-ocr.sh            # OCR
+#          bash download-ocr.sh --opencv   # OCR + video
+#      That downloads wheels into ./wheelhouse and REWRITES this file with exact pins.
+#   2. Copy the whole  offline-bundle/linux/heavy  folder to the offline machine.
+#   3. Re-run ../install-offline.sh (auto-installs heavy if wheelhouse present), or:
+#          <repo>/.venv/bin/python -m pip install --no-index --find-links wheelhouse -r requirements-heavy.txt
+#
+# Until you run download-ocr.sh, the lines below are just the source list (unpinned).
+paddleocr
+paddlepaddle
+# opencv-python

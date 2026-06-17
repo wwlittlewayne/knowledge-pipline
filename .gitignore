@@ -51,6 +51,10 @@ graph/graph.html
 # Code Atlas generated output (/pipeline-code)
 codemap/
 
+# Offline bundle: never commit the optional heavy OCR/video wheels (huge; generated on demand)
+offline-bundle/heavy/wheelhouse/
+offline-bundle/linux/heavy/wheelhouse/
+
 # Environment variables
 .env
 
