@@ -1,0 +1,47 @@
+# Small-tier GLM-5 prune+recover+quant — target: 2x 2080 Ti 22GB NVLink (Turing)
+# Run pipeline on the 96GB Blackwell box; final AWQ artifact ships to Turing box.
+
+model_id: "THUDM/glm-5-32b"   # adjust to actual HF model id when released
+output_root: "./out/small_tier"
+
+# Wanda pruning (unstructured — 2:4 has no Turing acceleration)
+sparsity: 0.5
+calib_dataset: "wikitext"
+calib_subset: "wikitext-2-raw-v1"
+calib_samples: 512
+calib_seqlen: 2048
+
+# LoRA recovery
+# Swap recover_dataset for your real mix:
+#   - bilingual chat:  "openchat/openchat_sharegpt4_dataset" + Chinese ShareGPT
+#   - instruction:     "Open-Orca/OpenOrca" / "HuggingFaceH4/ultrachat_200k"
+#   - domain-specific: your own dataset on the HF Hub or local jsonl
+recover_dataset: "Open-Orca/OpenOrca"
+recover_samples: 50000
+lora_rank: 64
+lora_alpha: 128
+# GLM-5 target modules — assumes Llama-style q/k/v/o + gate/up/down.
+# If GLM-5 uses fused QKV (older ChatGLM style), change to:
+#   ["query_key_value", "dense", "dense_h_to_4h", "dense_4h_to_h"]
+lora_target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  - gate_proj
+  - up_proj
+  - down_proj
+lora_epochs: 1
+lora_lr: 1.0e-4
+lora_batch: 1
+lora_grad_accum: 8
+lora_seqlen: 2048
+# Load pruned 32B base in NF4 for QLoRA — fits easily in 96GB with room for
+# bigger batch / longer seq. Flip to false if you want full BF16 base.
+use_qlora_base: true
+
+# AWQ INT4 quantization — final artifact for Turing serving
+awq_bits: 4
+awq_group_size: 128
+awq_zero_point: true
+awq_calib_samples: 128

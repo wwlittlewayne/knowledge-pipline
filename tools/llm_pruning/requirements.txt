@@ -1,0 +1,12 @@
+# Run on the 96GB Blackwell box (CUDA 12.4+).
+# Pin torch to your CUDA build separately; this file lists the rest.
+torch>=2.4
+transformers>=4.46
+accelerate>=1.0
+datasets>=3.0
+peft>=0.13
+trl>=0.12
+llmcompressor>=0.3
+autoawq>=0.2.6
+bitsandbytes>=0.44
+pyyaml
