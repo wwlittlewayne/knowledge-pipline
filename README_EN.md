@@ -213,6 +213,55 @@ pip install openai pymupdf python-docx openpyxl python-pptx beautifulsoup4 pillo
 pip install opencv-python
 ```
 
+### 🖥️ Setup & Run (Windows / Linux / macOS)
+
+> **There is no build/compile step** — this repo is pure Python plus a couple of Node scripts. "Setup" just means preparing the runtime.
+
+#### Option A: Code Atlas only (`/pipeline-code`) — zero dependencies
+
+Code symbol analysis is implemented with the **Python standard library only** — no `pip install`, no Node, no LLM API. If you have Python, you can run it directly:
+
+**Windows (PowerShell or CMD)**
+```powershell
+python --version            # needs Python 3.9+ (if not found, use: py --version)
+cd C:\path\to\knowledge-pipline
+python tools\pipeline_code.py . --open
+```
+
+**Linux / macOS**
+```bash
+python3 --version           # needs Python 3.9+
+cd /path/to/knowledge-pipline
+python3 tools/pipeline_code.py . --open
+```
+
+Outputs land in `<folder>/codemap/`: `codemap.md` (LLM-ready text map), `symbols.json`, `codemap.html`.
+
+#### Option B: Full pipeline (ingest / query / graph / PPT + slash commands)
+
+Requires Python deps, Node, and an LLM API:
+
+**Windows (PowerShell)**
+```powershell
+python -m pip install -r requirements.txt    # see the paddleocr note below
+node scripts\install-commands.mjs            # registers /pipeline-* commands to %USERPROFILE%\.claude\commands\
+npm install                                  # only needed for /pipeline-ppt export
+```
+
+**Linux / macOS**
+```bash
+python3 -m pip install -r requirements.txt
+node scripts/install-commands.mjs            # registers to ~/.claude/commands/
+npm install
+```
+
+> ⚠️ `paddleocr` and `trafilatura` are heavy on some systems and optional. If installation stalls, install just the common subset:
+> ```bash
+> pip install openai anthropic requests networkx pypdf python-docx openpyxl python-pptx beautifulsoup4 lxml pillow
+> ```
+
+Then configure the LLM as shown below (Code Atlas does not need this step).
+
 ### Configure LLM API
 
 On first use, run **`/pipeline-config`** in Claude Code and follow the interactive wizard.

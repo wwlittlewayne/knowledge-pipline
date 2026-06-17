@@ -237,6 +237,55 @@ pip install openai pymupdf python-docx openpyxl python-pptx beautifulsoup4 pillo
 pip install opencv-python
 ```
 
+### 🖥️ 安装与运行（Windows / Linux / macOS）
+
+> **本仓库无需编译**——它是纯 Python + 少量 Node 脚本，"安装"只是准备运行环境。
+
+#### 方案 A：只用 Code Atlas（`/pipeline-code`）— 零依赖
+
+代码符号分析是**纯 Python 标准库实现**，不需要 `pip install`、不需要 Node、不需要 LLM API。只要装了 Python 就能直接跑：
+
+**Windows（PowerShell 或 CMD）**
+```powershell
+python --version            # 需 Python 3.9+（若提示找不到，用 py --version）
+cd C:\path\to\knowledge-pipline
+python tools\pipeline_code.py . --open
+```
+
+**Linux / macOS**
+```bash
+python3 --version           # 需 Python 3.9+
+cd /path/to/knowledge-pipline
+python3 tools/pipeline_code.py . --open
+```
+
+产物写入 `<文件夹>/codemap/`：`codemap.md`（喂给 LLM 的文本地图）、`symbols.json`、`codemap.html`。
+
+#### 方案 B：完整管道（摄入 / 查询 / 图谱 / PPT + 斜杠命令）
+
+需要额外安装 Python 依赖、Node 与 LLM API：
+
+**Windows（PowerShell）**
+```powershell
+python -m pip install -r requirements.txt    # 见下方关于 paddleocr 的说明
+node scripts\install-commands.mjs            # 注册 /pipeline-* 斜杠命令到 %USERPROFILE%\.claude\commands\
+npm install                                  # 仅 /pipeline-ppt 导出需要
+```
+
+**Linux / macOS**
+```bash
+python3 -m pip install -r requirements.txt
+node scripts/install-commands.mjs            # 注册到 ~/.claude/commands/
+npm install
+```
+
+> ⚠️ `paddleocr`、`trafilatura` 在部分系统上较重且为可选项。若安装受阻，只装常用子集即可：
+> ```bash
+> pip install openai anthropic requests networkx pypdf python-docx openpyxl python-pptx beautifulsoup4 lxml pillow
+> ```
+
+完成后按下方「配置 LLM API」配置（Code Atlas 不需要此步）。
+
 ### 配置 LLM API
 
 首次使用时，在 Claude Code 中运行 **`/pipeline-config`**，按交互向导配置 LLM API。
