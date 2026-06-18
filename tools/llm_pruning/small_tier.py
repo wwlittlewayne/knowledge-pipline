@@ -46,11 +46,20 @@ from trl import SFTConfig, SFTTrainer
 
 from awq import AutoAWQForCausalLM
 
+from glm_arch import resolve_lora_targets, resolve_prune_ignore
+
 
 @dataclass
 class Config:
-    model_id: str = "THUDM/glm-5-32b"
+    # NOTE: GLM-5.2 only ships at 753B MoE — no small variant exists.
+    # Small tier defaults to a smaller dense GLM that fits TP=2 on 2x 2080 Ti.
+    # Override model_id + arch_preset in YAML for your actual small model.
+    model_id: str = "zai-org/GLM-4-9B-Chat"
     output_root: Path = Path("./out/small_tier")
+
+    # "llama" for dense GLM-4 / Llama / Qwen; "mla_moe" for GLM-5.2 (AWQ may
+    # not support glm_moe_dsa — small tier targets a dense model in practice).
+    arch_preset: str = "llama"
 
     sparsity: float = 0.5
     calib_dataset: str = "wikitext"
@@ -62,16 +71,18 @@ class Config:
     recover_samples: int = 50_000
     lora_rank: int = 64
     lora_alpha: int = 128
-    lora_target_modules: List[str] = field(default_factory=lambda: [
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
-    ])
+    # Empty → use arch_preset's lora_targets. Non-empty list overrides.
+    lora_target_modules: List[str] = field(default_factory=list)
     lora_epochs: int = 1
     lora_lr: float = 1e-4
     lora_batch: int = 1
     lora_grad_accum: int = 8
     lora_seqlen: int = 2048
     use_qlora_base: bool = True
+
+    # MoE knobs (router weight handling) — usually false for the small tier
+    moe: bool = False
+    moe_ignore_router: bool = True
 
     awq_bits: int = 4
     awq_group_size: int = 128
@@ -115,6 +126,10 @@ def stage_wanda(cfg: Config) -> Path:
     recipe = WandaPruningModifier(
         sparsity=cfg.sparsity,
         mask_structure="unstructured",
+        targets=["Linear"],
+        ignore=resolve_prune_ignore(
+            cfg.arch_preset, None, cfg.moe, cfg.moe_ignore_router,
+        ),
     )
 
     oneshot(
@@ -165,7 +180,7 @@ def stage_recover(cfg: Config, pruned_path: Path) -> Path:
     lora_cfg = LoraConfig(
         r=cfg.lora_rank,
         lora_alpha=cfg.lora_alpha,
-        target_modules=cfg.lora_target_modules,
+        target_modules=resolve_lora_targets(cfg.arch_preset, cfg.lora_target_modules),
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",

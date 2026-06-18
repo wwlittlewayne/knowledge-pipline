@@ -1,10 +1,26 @@
-# Big-tier GLM-5 prune+recover+quant — target: RTX Pro 6000 Blackwell 96GB (sm_100)
+# Big-tier GLM-5.2 prune+recover+quant — target: RTX Pro 6000 Blackwell 96GB (sm_100)
 # Native FP8/FP4, 2:4 sparse tensor cores, FlashAttention-3.
-# Final artifact serves on Blackwell with vLLM + FP8 KV cache for throughput.
+#
+# GLM-5.2 architecture (zai-org/GlmMoeDsaForCausalLM):
+#   - 753B total params, MoE (256 routed + 1 shared expert, 8 active per token)
+#   - 78 layers (first 3 dense, 75 MoE), MLA attention, 1M context
+#   - Custom arch → trust_remote_code mandatory (already handled in script)
+#
+# ⚠️ Memory note: 753B BF16 ≈ 1.5TB on disk, FP8 ≈ 376GB. Will NOT fit in 96GB
+# even after 2:4 + FP8. Single-box runs need aggressive disk offload (slow);
+# in production this is a multi-node / multi-GPU workload. The script uses
+# llm-compressor's per-layer offload via offload_folder so a single Blackwell
+# can still execute the recipe, just much slower than multi-GPU.
 
-model_id: "THUDM/glm-5-70b"   # adjust to actual HF model id when released
+model_id: "zai-org/GLM-5.2-FP8"        # start from official FP8 (~376GB)
+                                       # use "zai-org/GLM-5.2" for BF16 native (~1.5TB)
 output_root: "./out/big_tier"
-offload_folder: "/tmp/llmcompressor_offload"   # NVMe path recommended for 70B per-layer offload
+offload_folder: "/tmp/llmcompressor_offload"   # use NVMe path with TBs free
+
+# Architecture preset drives LoRA target modules and ignore patterns.
+#   "mla_moe"  : GLM-5.2 / DeepSeek V3  (MLA + MoE — current default)
+#   "llama"    : dense Llama/Qwen/GLM-4 — use for fallback small/medium models
+arch_preset: "mla_moe"
 
 # SparseGPT pruning (2:4 — real Blackwell tensor-core speedup)
 sparsity: 0.5
@@ -14,43 +30,35 @@ calib_subset: "wikitext-2-raw-v1"
 calib_samples: 512
 calib_seqlen: 2048
 
-# LoRA recovery (QLoRA NF4 base — 70B in 4-bit ≈ 35GB, fits easily in 96GB)
-# Swap recover_dataset for your real mix:
-#   - bilingual chat:  "openchat/openchat_sharegpt4_dataset" + Chinese ShareGPT
-#   - instruction:     "Open-Orca/OpenOrca" / "HuggingFaceH4/ultrachat_200k"
-#   - domain-specific: your own dataset on the HF Hub or local jsonl
+# LoRA recovery (QLoRA NF4 base)
+# For GLM-5.2 753B, even NF4 base ≈ 376GB; still needs offload on 96GB.
+# For a smaller target (e.g. GLM-4.5-Air), this becomes feasible on-GPU.
 recover_dataset: "Open-Orca/OpenOrca"
 recover_samples: 50000
 lora_rank: 64
 lora_alpha: 128
-# GLM-5 target modules — assumes Llama-style q/k/v/o + gate/up/down.
-# If GLM-5 uses fused QKV (older ChatGLM style), change to:
-#   ["query_key_value", "dense", "dense_h_to_4h", "dense_4h_to_h"]
-# If MoE: append per-expert modules (e.g. ["experts.*.gate_proj", ...]) or
-# rely on regex matching via llmcompressor target_modules patterns.
-lora_target_modules:
-  - q_proj
-  - k_proj
-  - v_proj
-  - o_proj
-  - gate_proj
-  - up_proj
-  - down_proj
+# Leave empty to use arch_preset defaults:
+#   mla_moe → q_b_proj, kv_b_proj, o_proj, gate_proj, up_proj, down_proj
+#            (matches dense MLP AND every routed/shared expert by suffix)
+#   llama   → q/k/v/o_proj, gate/up/down_proj
+# Override here only if you need to restrict scope.
+lora_target_modules: []
 lora_epochs: 1
 lora_lr: 1.0e-4
 lora_batch: 1
-lora_grad_accum: 16      # effective batch 16 — bigger than small tier for 70B stability
+lora_grad_accum: 16
 lora_seqlen: 2048
 
-# MoE handling — only matters if GLM-5 ships as MoE
-moe: false               # set true if GLM-5 is MoE
-moe_ignore_router: true  # router/gate weights stay dense (tiny, critical for routing)
+# MoE: keep router/gate weights dense — tiny and critical for routing
+moe: true
+moe_ignore_router: true
 
-# FP8 quantization — composes with 2:4 mask; weights + activations dynamic
+# FP8 quantization — composes with 2:4 mask; weights + activations dynamic.
+# Empty fp8_ignore → use arch_preset's prune_ignore (covers MLA latents,
+# routers, lm_head). Non-empty list appends extras.
 fp8_scheme: "FP8_DYNAMIC"
-fp8_ignore:
-  - lm_head
+fp8_ignore: []
 
 # Re-mask after LoRA merge: dense LoRA delta breaks strict 2:4 pattern.
-# A short SparseGPT pass restores it (model is already near-sparse, so fast).
+# Short SparseGPT pass restores it (model is already near-sparse, so fast).
 remask_calib_samples: 128

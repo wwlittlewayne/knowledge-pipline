@@ -1,8 +1,19 @@
-# Small-tier GLM-5 prune+recover+quant — target: 2x 2080 Ti 22GB NVLink (Turing)
+# Small-tier prune+recover+quant — target: 2x 2080 Ti 22GB NVLink (Turing)
 # Run pipeline on the 96GB Blackwell box; final AWQ artifact ships to Turing box.
+#
+# NOTE on GLM-5.2: GLM-5.2 ships ONLY at 753B MoE — no small variant exists,
+# and AutoAWQ doesn't currently support the glm_moe_dsa architecture anyway.
+# This config defaults to a dense smaller GLM that fits the 2080 Ti TP=2.
+# Swap model_id + arch_preset if you have a different small model.
 
-model_id: "THUDM/glm-5-32b"   # adjust to actual HF model id when released
+model_id: "zai-org/GLM-4-9B-Chat"     # dense 9B — fits TP=2 on 2x22GB easily
+                                       # alternatives: "Qwen/Qwen3-32B", "zai-org/GLM-4-32B"
 output_root: "./out/small_tier"
+
+# Architecture preset:
+#   "llama"   : Llama / Qwen / GLM-4 dense  (current default)
+#   "mla_moe" : DeepSeek V3 / GLM-5.2  (NOT supported by AutoAWQ — would break)
+arch_preset: "llama"
 
 # Wanda pruning (unstructured — 2:4 has no Turing acceleration)
 sparsity: 0.5
@@ -20,25 +31,20 @@ recover_dataset: "Open-Orca/OpenOrca"
 recover_samples: 50000
 lora_rank: 64
 lora_alpha: 128
-# GLM-5 target modules — assumes Llama-style q/k/v/o + gate/up/down.
-# If GLM-5 uses fused QKV (older ChatGLM style), change to:
-#   ["query_key_value", "dense", "dense_h_to_4h", "dense_4h_to_h"]
-lora_target_modules:
-  - q_proj
-  - k_proj
-  - v_proj
-  - o_proj
-  - gate_proj
-  - up_proj
-  - down_proj
+# Leave empty to use arch_preset defaults:
+#   llama   → q/k/v/o_proj, gate/up/down_proj
+#   mla_moe → q_b/kv_b/o_proj, gate/up/down_proj
+lora_target_modules: []
 lora_epochs: 1
 lora_lr: 1.0e-4
 lora_batch: 1
 lora_grad_accum: 8
 lora_seqlen: 2048
-# Load pruned 32B base in NF4 for QLoRA — fits easily in 96GB with room for
-# bigger batch / longer seq. Flip to false if you want full BF16 base.
 use_qlora_base: true
+
+# MoE knobs — only matters if you target an MoE model for small tier
+moe: false
+moe_ignore_router: true
 
 # AWQ INT4 quantization — final artifact for Turing serving
 awq_bits: 4

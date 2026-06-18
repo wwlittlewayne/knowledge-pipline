@@ -41,12 +41,17 @@ from llmcompressor.modifiers.quantization import QuantizationModifier
 from peft import LoraConfig, PeftModel
 from trl import SFTConfig, SFTTrainer
 
+from glm_arch import resolve_lora_targets, resolve_prune_ignore
+
 
 @dataclass
 class Config:
-    model_id: str = "THUDM/glm-5-70b"
+    model_id: str = "zai-org/GLM-5.2-FP8"
     output_root: Path = Path("./out/big_tier")
     offload_folder: Path = Path("/tmp/llmcompressor_offload")
+
+    # "mla_moe" for GLM-5.2 / DeepSeek V3; "llama" for dense models
+    arch_preset: str = "mla_moe"
 
     sparsity: float = 0.5
     mask_structure: str = "2:4"
@@ -59,21 +64,20 @@ class Config:
     recover_samples: int = 50_000
     lora_rank: int = 64
     lora_alpha: int = 128
-    lora_target_modules: List[str] = field(default_factory=lambda: [
-        "q_proj", "k_proj", "v_proj", "o_proj",
-        "gate_proj", "up_proj", "down_proj",
-    ])
+    # Empty → use arch_preset's lora_targets. Non-empty list overrides.
+    lora_target_modules: List[str] = field(default_factory=list)
     lora_epochs: int = 1
     lora_lr: float = 1e-4
     lora_batch: int = 1
     lora_grad_accum: int = 16
     lora_seqlen: int = 2048
 
-    moe: bool = False
+    moe: bool = True
     moe_ignore_router: bool = True
 
     fp8_scheme: str = "FP8_DYNAMIC"
-    fp8_ignore: List[str] = field(default_factory=lambda: ["lm_head"])
+    # Empty → use arch_preset's prune_ignore. Non-empty list appends to it.
+    fp8_ignore: List[str] = field(default_factory=list)
 
     remask_calib_samples: int = 128
 
@@ -104,11 +108,9 @@ def _build_calib(cfg: Config, n: int):
 
 
 def _ignore_targets(cfg: Config) -> List[str]:
-    ignore = ["lm_head"]
-    if cfg.moe and cfg.moe_ignore_router:
-        # Keep router/gate weights dense — they're tiny and critical for routing
-        ignore += ["re:.*router.*", "re:.*gate$"]
-    return ignore
+    return resolve_prune_ignore(
+        cfg.arch_preset, cfg.fp8_ignore, cfg.moe, cfg.moe_ignore_router,
+    )
 
 
 def stage_sparsegpt(cfg: Config) -> Path:
@@ -169,7 +171,7 @@ def stage_recover(cfg: Config, pruned_path: Path) -> Path:
     lora_cfg = LoraConfig(
         r=cfg.lora_rank,
         lora_alpha=cfg.lora_alpha,
-        target_modules=cfg.lora_target_modules,
+        target_modules=resolve_lora_targets(cfg.arch_preset, cfg.lora_target_modules),
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
