@@ -1,0 +1,44 @@
+# Mid-tier 30B DENSE preset — target: 2x 3090 24GB NVLink + 2x EPYC 75F3 + 256GB
+# Engine: llama.cpp (DEFAULT)
+#
+# 30B dense at Q4_K_M is ~17GB → fits one 3090 alone, plenty of VRAM
+# headroom for 32k+ context. Throughput: 40-80 tok/s single-user.
+# Qwen2.5-Coder-32B is a strong default for engineering+coding work.
+
+model_id: "Qwen/Qwen2.5-Coder-32B-Instruct"
+output_root: "./out/mid_tier_30b"
+offload_folder: "/tmp/llmcompressor_offload"
+
+engine: "llama_cpp"
+arch_preset: "llama"
+
+calib_dataset: "wikitext"
+calib_subset: "wikitext-2-raw-v1"
+calib_samples: 512
+calib_seqlen: 2048
+
+# Code base is already strong — focus recovery on retention + EE/DSP knowledge
+recover_samples: 50000
+recover_datasets:
+  - { name: "ise-uiuc/Magicoder-Evol-Instruct-110K", weight: 0.25 }   # less code; base is already a code model
+  - { name: "garage-bAInd/Open-Platypus",            weight: 0.25 }
+  - { name: "HuggingFaceH4/ultrachat_200k", split: "train_sft", weight: 0.25 }
+  - { name: "Open-Orca/OpenOrca",                    weight: 0.15 }
+  - { name: "shailja/Verilog_GitHub",                weight: 0.10 }
+  # - { name: "./data/my_domain.jsonl",              weight: 0.10 }
+
+lora_rank: 64
+lora_alpha: 128
+lora_target_modules: []
+lora_epochs: 2          # small model can afford more epochs
+lora_lr: 1.0e-4
+lora_batch: 2
+lora_grad_accum: 8
+lora_seqlen: 4096
+use_qlora_base: true
+
+moe: false
+moe_ignore_router: true
+
+llama_cpp_dir: "/opt/llama.cpp"
+gguf_quant: "Q5_K_M"    # 30B is small enough that Q5_K_M is affordable for better quality

@@ -1,0 +1,49 @@
+# Mid-tier MAX PARAMS preset — vLLM ALTERNATIVE for multi-user serving
+# Use this instead of mid_tier_max.yaml when 4+ concurrent users share the box.
+# vLLM's continuous batching + paged attention wins on aggregate throughput.
+# Single-user is slower than llama.cpp variant by ~1.5x on this hardware.
+
+model_id: "deepseek-ai/DeepSeek-V2.5"
+output_root: "./out/mid_tier_max_vllm"
+offload_folder: "/tmp/llmcompressor_offload"
+
+engine: "vllm"
+arch_preset: "mla_moe"
+
+# SparseGPT 2:4 enabled — Ampere has 2:4 tensor-core accel; Marlin loves it
+sparsity: 0.5
+mask_structure: "2:4"
+
+calib_dataset: "wikitext"
+calib_subset: "wikitext-2-raw-v1"
+calib_samples: 512
+calib_seqlen: 2048
+
+# Same multi-domain recovery mix as the llama.cpp variant
+recover_samples: 80000
+recover_datasets:
+  - { name: "ise-uiuc/Magicoder-Evol-Instruct-110K", weight: 0.35 }
+  - { name: "ise-uiuc/Magicoder-OSS-Instruct-75K",   weight: 0.10 }
+  - { name: "garage-bAInd/Open-Platypus",            weight: 0.15 }
+  - { name: "HuggingFaceH4/ultrachat_200k", split: "train_sft", weight: 0.20 }
+  - { name: "Open-Orca/OpenOrca",                    weight: 0.10 }
+  - { name: "shailja/Verilog_GitHub",                weight: 0.05 }
+  # - { name: "./data/my_wireless_dsp_qa.jsonl",     weight: 0.05 }
+
+lora_rank: 96
+lora_alpha: 192
+lora_target_modules: []
+lora_epochs: 1
+lora_lr: 1.0e-4
+lora_batch: 1
+lora_grad_accum: 32
+lora_seqlen: 4096
+use_qlora_base: true
+
+moe: true
+moe_ignore_router: true
+
+# vLLM W4A16 INT4 (Marlin kernel)
+w4a16_scheme: "W4A16"
+w4a16_ignore: []
+remask_calib_samples: 128
