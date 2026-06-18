@@ -1,0 +1,55 @@
+# Small-tier prune+recover+quant — CODING EXPERT preset
+# Target hardware: 2x 2080 Ti 22GB NVLink (Turing).
+# Specializes the base model on code via LoRA recovery with Magicoder data.
+#
+# Usage:
+#   python small_tier.py --config configs/small_tier_coding.yaml --stage all
+#
+# Or override on the CLI (no YAML edit needed):
+#   python small_tier.py \
+#     --config configs/small_tier.yaml \
+#     --model-id zai-org/GLM-4-9B-Chat \
+#     --recover-dataset ise-uiuc/Magicoder-Evol-Instruct-110K \
+#     --recover-samples 80000 \
+#     --lora-epochs 2 \
+#     --output-root ./out/small_tier_coding
+
+model_id: "zai-org/GLM-4-9B-Chat"
+output_root: "./out/small_tier_coding"
+
+arch_preset: "llama"
+
+# Pruning — keep general calib so attention/MLP don't collapse on code-only stats
+sparsity: 0.5
+calib_dataset: "wikitext"
+calib_subset: "wikitext-2-raw-v1"
+calib_samples: 512
+calib_seqlen: 2048
+
+# CODE-SPECIFIC recovery FT
+# Magicoder-Evol-Instruct-110K: 110k high-quality instruction-response code pairs
+# Alternatives:
+#   - ise-uiuc/Magicoder-OSS-Instruct-75K  : 75k from OSS repo seeds
+#   - m-a-p/CodeFeedback-Filtered-Instruction : 156k filtered, multi-language
+#   - nickrosh/Evol-Instruct-Code-80k-v1   : 80k Evol-Instruct style
+#   - bigcode/oasst-octopack               : OSS-Assistant style code chat
+recover_dataset: "ise-uiuc/Magicoder-Evol-Instruct-110K"
+recover_samples: 80000
+lora_rank: 96            # bump from 64 → 96 for stronger domain specialization
+lora_alpha: 192
+lora_target_modules: []  # empty → use arch_preset's defaults
+lora_epochs: 2           # 2 epochs for code; more memorization beats general blur
+lora_lr: 1.0e-4
+lora_batch: 1
+lora_grad_accum: 8
+lora_seqlen: 4096        # bump from 2048 → 4096 so code with long context survives
+use_qlora_base: true
+
+moe: false
+moe_ignore_router: true
+
+# AWQ INT4 — final artifact for Turing serving
+awq_bits: 4
+awq_group_size: 128
+awq_zero_point: true
+awq_calib_samples: 128

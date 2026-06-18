@@ -300,9 +300,33 @@ def main() -> None:
     p.add_argument("--pruned-path", type=Path)
     p.add_argument("--lora-path", type=Path)
     p.add_argument("--merged-path", type=Path)
+
+    # Domain / dataset overrides — apply on top of YAML defaults.
+    p.add_argument("--model-id",
+                   help="HF model id, overrides Config.model_id")
+    p.add_argument("--recover-dataset",
+                   help="HF dataset for LoRA recovery (e.g. ise-uiuc/Magicoder-Evol-Instruct-110K for coding)")
+    p.add_argument("--recover-samples", type=int,
+                   help="Number of recovery samples to take")
+    p.add_argument("--lora-epochs", type=int,
+                   help="LoRA recovery epochs (try 2-3 for stronger domain specialization)")
+    p.add_argument("--output-root", type=Path,
+                   help="Where stage artifacts land; isolate per-domain runs")
     args = p.parse_args()
 
     cfg = Config.from_yaml(args.config) if args.config else Config()
+
+    if args.model_id:
+        cfg.model_id = args.model_id
+    if args.recover_dataset:
+        cfg.recover_dataset = args.recover_dataset
+    if args.recover_samples:
+        cfg.recover_samples = args.recover_samples
+    if args.lora_epochs:
+        cfg.lora_epochs = args.lora_epochs
+    if args.output_root:
+        cfg.output_root = args.output_root
+
     cfg.output_root.mkdir(parents=True, exist_ok=True)
 
     pruned = args.pruned_path or (cfg.output_root / "wanda")
