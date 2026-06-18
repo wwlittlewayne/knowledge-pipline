@@ -31,11 +31,11 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 import torch
 import yaml
-from datasets import load_dataset
+from datasets import concatenate_datasets, load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
 from llmcompressor.transformers import oneshot
@@ -68,6 +68,11 @@ class Config:
     calib_seqlen: int = 2048
 
     recover_dataset: str = "Open-Orca/OpenOrca"
+    # Multi-domain mixing: list of {name, weight, split?} dicts. When non-empty
+    # this OVERRIDES recover_dataset. weight is the share of recover_samples
+    # drawn from that source (need not sum to 1.0). Use local .jsonl paths for
+    # proprietary domain data (wireless, DSP, FPGA, ASIC textbooks/specs).
+    recover_datasets: List[Dict] = field(default_factory=list)
     recover_samples: int = 50_000
     lora_rank: int = 64
     lora_alpha: int = 128
@@ -102,6 +107,63 @@ def _load_calib_texts(cfg: Config, n: int) -> list[str]:
     raw = load_dataset(cfg.calib_dataset, cfg.calib_subset, split="train")
     texts = [r["text"] for r in raw if r.get("text") and len(r["text"]) > 200]
     return texts[:n]
+
+
+def _to_chat_text(ex, tokenizer):
+    """Normalize one example to a chat-templated string regardless of schema."""
+    if "messages" in ex:
+        return {"text": tokenizer.apply_chat_template(ex["messages"], tokenize=False)}
+    user = ex.get("instruction") or ex.get("prompt") or ex.get("question") or ""
+    sys = ex.get("system_prompt") or ex.get("system") or ""
+    bot = ex.get("output") or ex.get("response") or ex.get("answer") or ""
+    msgs = []
+    if sys:
+        msgs.append({"role": "system", "content": sys})
+    msgs += [
+        {"role": "user", "content": user},
+        {"role": "assistant", "content": bot},
+    ]
+    return {"text": tokenizer.apply_chat_template(msgs, tokenize=False)}
+
+
+def _load_one_dataset(spec: Dict, n_target: int):
+    """Load one HF dataset id or local jsonl, shuffled, capped at n_target."""
+    name = spec["name"]
+    split = spec.get("split", "train")
+    subset = spec.get("subset")
+
+    if name.endswith(".jsonl") or name.endswith(".json"):
+        ds = load_dataset("json", data_files=name, split="train")
+    elif subset:
+        ds = load_dataset(name, subset, split=split)
+    else:
+        ds = load_dataset(name, split=split)
+
+    ds = ds.shuffle(seed=42)
+    return ds.select(range(min(n_target, len(ds))))
+
+
+def _load_recovery_data(cfg: Config, tokenizer):
+    """Load and concat all recovery datasets, normalized to {text: ...}."""
+    specs = cfg.recover_datasets if cfg.recover_datasets else [
+        {"name": cfg.recover_dataset, "weight": 1.0}
+    ]
+
+    parts = []
+    for spec in specs:
+        weight = spec.get("weight", 1.0)
+        n_target = max(1, int(cfg.recover_samples * weight))
+        ds = _load_one_dataset(spec, n_target)
+        ds = ds.map(
+            lambda ex: _to_chat_text(ex, tokenizer),
+            remove_columns=ds.column_names,
+        )
+        print(f"[recover] + {spec['name']}: {len(ds)} samples (weight={weight})")
+        parts.append(ds)
+
+    combined = concatenate_datasets(parts).shuffle(seed=42)
+    print(f"[recover] total mixed dataset: {len(combined)} samples")
+    return combined
 
 
 def stage_wanda(cfg: Config) -> Path:
@@ -186,28 +248,7 @@ def stage_recover(cfg: Config, pruned_path: Path) -> Path:
         task_type="CAUSAL_LM",
     )
 
-    ds = (
-        load_dataset(cfg.recover_dataset, split="train")
-        .shuffle(seed=42)
-        .select(range(cfg.recover_samples))
-    )
-
-    def to_text(ex):
-        if "messages" in ex:
-            return {"text": tokenizer.apply_chat_template(ex["messages"], tokenize=False)}
-        user = ex.get("instruction") or ex.get("prompt") or ex.get("question") or ""
-        sys = ex.get("system_prompt") or ex.get("system") or ""
-        bot = ex.get("output") or ex.get("response") or ex.get("answer") or ""
-        msgs = []
-        if sys:
-            msgs.append({"role": "system", "content": sys})
-        msgs += [
-            {"role": "user", "content": user},
-            {"role": "assistant", "content": bot},
-        ]
-        return {"text": tokenizer.apply_chat_template(msgs, tokenize=False)}
-
-    ds = ds.map(to_text, remove_columns=ds.column_names)
+    ds = _load_recovery_data(cfg, tokenizer)
 
     sft_args = SFTConfig(
         output_dir=str(out),
