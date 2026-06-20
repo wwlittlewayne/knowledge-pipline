@@ -54,7 +54,18 @@ tools/llm_pruning/
     ├── small_tier.yaml                  # GLM-4-9B-Chat fallback
     ├── small_tier_coding.yaml           # coding-only specialization
     └── small_tier_eng_coding.yaml       # coding + EE/DSP/FPGA knowledge retention
+
+quant/                                   # quantization-ONLY scripts (no prune/recovery)
+├── quant_iq2m.py / quant_iq3xxs.py / quant_q4km.py   # GGUF (llama.cpp)
+├── quant_fp8.py / quant_int8.py                       # compressed-tensors (vLLM)
+├── quant_common.py                                    # shared helpers
+└── README.md                                          # fit table + GLM-5.2 753B notes
 ```
+
+For direct quantization without the prune+recover pipeline (e.g. running
+GLM-5.2 on the 2× 3090 box after a 512 GB RAM upgrade), see
+[`quant/README.md`](quant/README.md). Quick fit summary for GLM-5.2's 753B:
+IQ2_M / IQ3_XXS / Q4_K_M (GGUF) fit 560 GB; FP8 / INT8 (~753 GB) do not.
 
 ---
 
