@@ -180,6 +180,32 @@ Tune `--n-cpu-moe` (number of MoE expert layers offloaded to CPU) — higher
 = less VRAM use, more CPU compute. Aim to fill ~22 GB per card. `-ngl` puts
 the first N transformer layers on GPU (use 999 to mean "all dense layers").
 
+### Cross-tier serving — run mid-tier GGUFs on the 2× 2080 Ti box too
+
+A GGUF artifact is runtime-engine-independent. The same file from
+`mid_tier.py`'s `stage_gguf` works on both the 2× 3090 box and the 2× 2080
+Ti box, with different offload knobs because the two architectures expose
+different flags:
+
+| Architecture | Full GPU | Partial offload (less VRAM / longer context) |
+|---|---|---|
+| Dense (30B / 70B) | `-ngl 999` | `-ngl <N>` where N < total transformer layers |
+| MoE (236B) | `-ngl 999` (handles dense layers only) | `-ngl 999 --n-cpu-moe <N>` (N expert layers to CPU) |
+
+The `stage_gguf` step prints both recipes — one for 2× 3090 + EPYC and one
+for 2× 2080 Ti — and picks the right flag set based on `cfg.moe`. Notes
+per architecture:
+
+- **MoE on 2080 Ti**: bump `--n-cpu-moe` higher (e.g. 56 instead of 32) and
+  drop context length — Turing has no FlashAttention-2, so KV cache pressure
+  is significantly worse. Single-consumer CPU on that box doesn't get
+  `--numa distribute`.
+- **70B dense on 2080 Ti**: Q4_K_M (~40 GB) fits the 44 GB TP=2 budget but
+  is tight. If OOM on KV, either rebuild as `Q3_K_M` (~30 GB) for headroom,
+  or drop `-ngl` to e.g. 60 to push later layers to CPU.
+- **30B dense on 2080 Ti**: Q5_K_M (~22 GB) fits a single 2080 Ti
+  comfortably with `--tensor-split 1,0` to disable TP overhead.
+
 ---
 
 ## Preset comparison

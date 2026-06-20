@@ -393,17 +393,51 @@ def stage_gguf(cfg: Config, merged_path: Path) -> Path:
         print(f"[gguf] cleaned intermediate {f16_gguf.name}")
 
     print(f"[gguf] final artifact → {final_gguf}")
-    print()
-    print(f"[gguf] ship to 2× 3090 + EPYC box:")
-    print(f"      rsync -av --progress {final_gguf} user@mid-tier-box:/models/")
-    print()
-    print(f"[gguf] serve single-user on 2× 3090:")
-    print(f"      llama-server -m /models/{final_gguf.name} \\")
-    print(f"        -ngl 999 --n-cpu-moe 32 \\")
-    print(f"        -c 16384 --parallel 1 \\")
-    print(f"        --threads 64 --numa distribute --mlock \\")
-    print(f"        --host 0.0.0.0 --port 8080")
+    _print_serve_commands(cfg, final_gguf)
     return final_gguf
+
+
+def _print_serve_commands(cfg: Config, gguf: Path) -> None:
+    """Emit arch-aware llama-server recipes for both the 2x 3090 + EPYC box
+    and the 2x 2080 Ti box (cross-tier serving)."""
+    print()
+    print(f"[gguf] ship to your serving box:")
+    print(f"      rsync -av --progress {gguf} user@<host>:/models/")
+    print()
+
+    if cfg.moe:
+        # MoE: --n-cpu-moe controls how many EXPERT layers stay on CPU.
+        print(f"[serve] 2× 3090 24GB + 2× EPYC 75F3 (recommended for MoE):")
+        print(f"      llama-server -m /models/{gguf.name} \\")
+        print(f"        -ngl 999 --n-cpu-moe 32 \\           # tune up to free more VRAM for KV")
+        print(f"        -c 16384 --parallel 1 \\")
+        print(f"        --threads 64 --numa distribute --mlock \\")
+        print(f"        --host 0.0.0.0 --port 8080")
+        print()
+        print(f"[serve] 2× 2080 Ti 22GB (less VRAM, no FA2 — push more experts to CPU):")
+        print(f"      llama-server -m /models/{gguf.name} \\")
+        print(f"        -ngl 999 --n-cpu-moe 56 \\           # more on CPU due to smaller VRAM")
+        print(f"        -c 8192 --parallel 1 \\              # smaller ctx — KV pressure worse w/o FA2")
+        print(f"        --threads $(nproc) --mlock \\")
+        print(f"        --host 0.0.0.0 --port 8080")
+    else:
+        # Dense: --n-cpu-moe is a no-op. Use -ngl <N> for partial offload.
+        print(f"[serve] 2× 3090 24GB + 2× EPYC 75F3 (fits VRAM, no offload):")
+        print(f"      llama-server -m /models/{gguf.name} \\")
+        print(f"        -ngl 999 --split-mode row \\         # all layers on GPU, TP=2")
+        print(f"        -c 32768 --parallel 1 \\")
+        print(f"        --threads 64 --numa distribute --mlock \\")
+        print(f"        --host 0.0.0.0 --port 8080")
+        print()
+        print(f"[serve] 2× 2080 Ti 22GB (44GB total, dense weights):")
+        print(f"      # 30B Q5_K_M (~22GB)  → fits one card; consider --tensor-split 1,0")
+        print(f"      # 70B Q4_K_M (~40GB)  → fits TP=2 tight; for KV headroom rebuild as Q3_K_M")
+        print(f"      # If OOM: drop -ngl to e.g. 60 to push later layers to CPU")
+        print(f"      llama-server -m /models/{gguf.name} \\")
+        print(f"        -ngl 999 --split-mode row \\")
+        print(f"        -c 8192 --parallel 1 \\")
+        print(f"        --threads $(nproc) --mlock \\")
+        print(f"        --host 0.0.0.0 --port 8080")
 
 
 def main() -> None:
