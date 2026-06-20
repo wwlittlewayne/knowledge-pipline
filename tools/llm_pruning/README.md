@@ -71,11 +71,18 @@ IQ2_M / IQ3_XXS / Q4_K_M (GGUF) fit 560 GB; FP8 / INT8 (~753 GB) do not.
 
 ## Quick start
 
+**Python version**: use **3.11 or 3.12** (3.12 recommended). Floor is 3.10
+(modern vLLM / llm-compressor require it). Avoid 3.13 — a few ML wheels
+(autoawq, some vLLM builds) still lag on it. On the Turing serving box keep
+3.10/3.11 to match the pinned torch 2.3.x serving stack. A `conda`/`venv` per
+box keeps the three CUDA stacks from colliding.
+
 On any box:
 
 ```bash
 git pull origin claude/wonderful-carson-c11wex
 cd tools/llm_pruning
+python3 --version                   # confirm 3.11.x or 3.12.x
 ./setup.sh                          # auto-detects GPU arch, installs matching CUDA torch + deps
 # or, to also build llama.cpp (needed for GGUF quant + mid-tier llama.cpp engine):
 ./setup.sh --llama-cpp-dir /opt/llama.cpp

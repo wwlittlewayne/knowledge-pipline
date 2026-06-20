@@ -39,6 +39,9 @@ FP8/INT8 scripts go through `transformers` with `trust_remote_code=True`, so
 
 ## Prerequisites
 
+**Python 3.11 or 3.12** (3.12 recommended; floor 3.10, avoid 3.13). Use a
+fresh venv/conda env per box.
+
 Fastest path — the auto-detecting setup script (one dir up) installs the
 arch-matched PyTorch + deps AND builds llama.cpp in one shot:
 

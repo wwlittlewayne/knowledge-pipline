@@ -50,6 +50,16 @@ if [[ "$MAKE_VENV" == "1" ]]; then
 fi
 
 PIP="${PIP:-pip}"
+
+# ---- python version sanity (recommend 3.11/3.12, floor 3.10) ----------------
+PYVER="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+case "$PYVER" in
+  3.11|3.12) echo "==> Python $PYVER ✅" ;;
+  3.10)      echo "==> Python $PYVER (ok — floor; 3.11/3.12 preferred)" ;;
+  3.13)      echo "⚠️  Python $PYVER — some ML wheels (autoawq, certain vLLM builds) may lag; 3.11/3.12 recommended" ;;
+  *)         echo "⚠️  Python $PYVER is outside the tested 3.10–3.12 range; expect wheel issues" ;;
+esac
+
 $PIP install --upgrade pip setuptools wheel >/dev/null
 
 # ---- detect GPU compute capability -----------------------------------------
