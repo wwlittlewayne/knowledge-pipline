@@ -1,0 +1,87 @@
+# Small-tier prune+recover+quant — ENGINEERING + CODING preset
+# Goal: become a coding expert while RETAINING knowledge about wireless
+# communications, DSP, FPGA/HDL, ASIC design, and general SW engineering.
+#
+# Strategy:
+#   1. Pruning damages knowledge uniformly. Recovery FT decides what gets
+#      restored. Mix code + general SFT + STEM/reasoning + (your domain docs)
+#      so the model relearns all the surface areas you care about, not just
+#      coding.
+#   2. Public datasets for wireless / DSP / RF / FPGA are scarce. Bring your
+#      own EE/DSP/RF documents (textbooks, app notes, datasheets, internal
+#      docs) as Q&A pairs in a local .jsonl file. See `# YOUR DOMAIN` below.
+#
+# Usage:
+#   python small_tier.py --config configs/small_tier_eng_coding.yaml --stage all
+#
+# To prepare your own domain jsonl, each line should be:
+#   {"instruction": "Q...", "output": "A..."}     or
+#   {"messages": [{"role":"user","content":"..."}, {"role":"assistant","content":"..."}]}
+
+model_id: "zai-org/GLM-4-9B-Chat"
+output_root: "./out/small_tier_eng_coding"
+
+arch_preset: "llama"
+
+# Pruning — keep wikitext calib for broad activation distribution
+sparsity: 0.5
+calib_dataset: "wikitext"
+calib_subset: "wikitext-2-raw-v1"
+calib_samples: 512
+calib_seqlen: 2048
+
+# MULTI-DOMAIN recovery mix — weights sum to ~1.0 (don't have to)
+# Total samples drawn: recover_samples * sum(weights)
+recover_samples: 100000
+recover_datasets:
+  # === CODING (the new skill we want to add) ===
+  - name: "ise-uiuc/Magicoder-Evol-Instruct-110K"
+    weight: 0.35      # 35k samples — primary code instruct
+  - name: "ise-uiuc/Magicoder-OSS-Instruct-75K"
+    weight: 0.10      # 10k — OSS-style real-world code
+
+  # === STEM / REASONING (preserves DSP/wireless math, EE reasoning) ===
+  - name: "garage-bAInd/Open-Platypus"
+    weight: 0.15      # 15k — STEM word problems, EE/physics QA, logic
+
+  # === GENERAL CHAT (preserves instruction-following, prevents stiffness) ===
+  - name: "HuggingFaceH4/ultrachat_200k"
+    split: "train_sft"
+    weight: 0.20      # 20k — high-quality multi-turn chat
+  - name: "Open-Orca/OpenOrca"
+    weight: 0.10      # 10k — diverse task following
+
+  # === HDL / VERILOG (closest public proxy for FPGA/ASIC RTL) ===
+  - name: "shailja/Verilog_GitHub"
+    weight: 0.05      # 5k — Verilog code samples
+                       # NOTE: this is raw code without instructions; consider
+                       # excluding it and using your own HDL Q&A jsonl instead
+
+  # === YOUR DOMAIN (uncomment + point at your own jsonl) ===
+  # The wireless/DSP/RF/FPGA/ASIC domains have ~no good public SFT data.
+  # Convert your textbooks, papers, internal docs to Q&A and put them here.
+  # Even 1k–5k high-quality domain samples make a huge difference.
+  # - name: "./data/my_wireless_dsp_qa.jsonl"
+  #   weight: 0.05
+  # - name: "./data/my_fpga_asic_qa.jsonl"
+  #   weight: 0.05
+
+# Stronger specialization — bump rank + epochs since we have a bigger mix
+lora_rank: 128
+lora_alpha: 256
+lora_target_modules: []   # use arch_preset defaults
+lora_epochs: 2
+lora_lr: 1.0e-4
+lora_batch: 1
+lora_grad_accum: 8
+lora_seqlen: 4096         # longer seq so code + technical docs survive
+use_qlora_base: true
+
+moe: false
+moe_ignore_router: true
+
+# AWQ INT4 for 2x 2080 Ti serving
+awq_bits: 4
+awq_group_size: 128
+awq_zero_point: true
+awq_calib_samples: 128

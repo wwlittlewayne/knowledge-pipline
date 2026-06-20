@@ -1,0 +1,57 @@
+# Mid-tier MAX PARAMS preset — target: 2x 3090 24GB NVLink + 2x EPYC 75F3 + 256GB
+# Engine: llama.cpp (DEFAULT)  — for single-user max tok/s
+#
+# Strategy: 235B MoE (DeepSeek-V2.5) → recover with multi-domain mix →
+# merge → GGUF Q4_K_M. The 75F3 + DDR4 actually computes cold experts on
+# CPU (AVX-512), not just stores them. Target throughput: 15-22 tok/s
+# single-user with --n-cpu-moe tuned to fill VRAM.
+#
+# To switch to vLLM (multi-user serving): use mid_tier_max_vllm.yaml instead.
+#
+# Pipeline runs on Blackwell 96GB (heavier prune jobs are tractable there;
+# 256GB on the 3090 box can also run recovery for <100B models).
+
+model_id: "deepseek-ai/DeepSeek-V2.5"   # 236B MoE / ~21B active, MLA + MoE
+output_root: "./out/mid_tier_max"
+offload_folder: "/tmp/llmcompressor_offload"
+
+engine: "llama_cpp"
+arch_preset: "mla_moe"
+
+# Calibration (used in QLoRA recovery's loss eval; not for SparseGPT since skipped)
+calib_dataset: "wikitext"
+calib_subset: "wikitext-2-raw-v1"
+calib_samples: 512
+calib_seqlen: 2048
+
+# Multi-domain recovery — coding + EE/DSP/FPGA/ASIC retention
+recover_samples: 80000
+recover_datasets:
+  - { name: "ise-uiuc/Magicoder-Evol-Instruct-110K", weight: 0.35 }
+  - { name: "ise-uiuc/Magicoder-OSS-Instruct-75K",   weight: 0.10 }
+  - { name: "garage-bAInd/Open-Platypus",            weight: 0.15 }
+  - { name: "HuggingFaceH4/ultrachat_200k", split: "train_sft", weight: 0.20 }
+  - { name: "Open-Orca/OpenOrca",                    weight: 0.10 }
+  - { name: "shailja/Verilog_GitHub",                weight: 0.05 }
+  # Bring your own wireless / DSP / FPGA / ASIC jsonl:
+  # - { name: "./data/my_wireless_dsp_qa.jsonl",     weight: 0.05 }
+
+lora_rank: 96
+lora_alpha: 192
+lora_target_modules: []   # use mla_moe preset
+lora_epochs: 1            # 235B is big; 1 epoch is plenty
+lora_lr: 1.0e-4
+lora_batch: 1
+lora_grad_accum: 32       # effective batch 32 for stability at this scale
+lora_seqlen: 4096
+use_qlora_base: true      # mandatory — 236B BF16 base wouldn't fit otherwise
+
+moe: true
+moe_ignore_router: true
+
+# llama.cpp GGUF export
+llama_cpp_dir: "/opt/llama.cpp"   # adjust to your build location
+gguf_quant: "Q4_K_M"              # best speed/quality MoE tradeoff
+                                   # alternatives: Q5_K_M (better quality, ~25% bigger)
+                                   #               Q6_K   (near-lossless, ~50% bigger)
+                                   #               Q3_K_M (smaller, more loss)
