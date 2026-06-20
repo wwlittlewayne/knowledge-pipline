@@ -71,12 +71,22 @@ IQ2_M / IQ3_XXS / Q4_K_M (GGUF) fit 560 GB; FP8 / INT8 (~753 GB) do not.
 
 ## Quick start
 
-On the **Blackwell box**:
+On any box:
 
 ```bash
 git pull origin claude/wonderful-carson-c11wex
 cd tools/llm_pruning
-pip install torch --index-url https://download.pytorch.org/whl/cu124
+./setup.sh                          # auto-detects GPU arch, installs matching CUDA torch + deps
+# or, to also build llama.cpp (needed for GGUF quant + mid-tier llama.cpp engine):
+./setup.sh --llama-cpp-dir /opt/llama.cpp
+```
+
+`setup.sh` reads the GPU compute capability and picks the right PyTorch wheel
+(Turing/Ampere/Hopper → cu124, Blackwell → cu128, no GPU → cpu). It does NOT
+auto-download models — those pull from HuggingFace at first run. Manual path:
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu124  # cu128 on Blackwell
 pip install -r requirements.txt
 ```
 

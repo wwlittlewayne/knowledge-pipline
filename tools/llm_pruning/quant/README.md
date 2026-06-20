@@ -39,17 +39,31 @@ FP8/INT8 scripts go through `transformers` with `trust_remote_code=True`, so
 
 ## Prerequisites
 
-**GGUF scripts** — build llama.cpp:
+Fastest path — the auto-detecting setup script (one dir up) installs the
+arch-matched PyTorch + deps AND builds llama.cpp in one shot:
+
 ```bash
-git clone https://github.com/ggerganov/llama.cpp /opt/llama.cpp
-cd /opt/llama.cpp
-cmake -B build -DGGML_CUDA=ON
-cmake --build build -j $(nproc)
-pip install -r requirements.txt    # for convert_hf_to_gguf.py
+cd ..                 # tools/llm_pruning/
+./setup.sh --llama-cpp-dir /opt/llama.cpp
 ```
 
-**FP8/INT8 scripts** — `pip install -r ../requirements.txt` (llm-compressor,
-transformers, torch, datasets).
+Then run any quant script with `--llama-cpp-dir /opt/llama.cpp`.
+
+> The scripts do NOT auto-install packages or build llama.cpp themselves —
+> `setup.sh` does that. Model weights + the WikiText calibration set DO
+> download automatically from HuggingFace on first run.
+
+Manual equivalent:
+
+```bash
+# GGUF scripts — build llama.cpp
+git clone https://github.com/ggerganov/llama.cpp /opt/llama.cpp
+cd /opt/llama.cpp && cmake -B build -DGGML_CUDA=ON && cmake --build build -j $(nproc)
+pip install -r requirements.txt    # for convert_hf_to_gguf.py
+
+# FP8/INT8 scripts
+pip install -r ../requirements.txt  # llm-compressor, transformers, torch, datasets
+```
 
 ## Usage
 
